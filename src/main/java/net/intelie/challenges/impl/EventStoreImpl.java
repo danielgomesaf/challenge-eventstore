@@ -1,43 +1,65 @@
 package net.intelie.challenges.impl;
 
-import org.bson.conversions.Bson;
-
-import com.mongodb.client.MongoCollection;
-import com.mongodb.client.MongoCursor;
-import com.mongodb.client.model.Filters;
+import java.util.ArrayList;
+import java.util.List;
 
 import net.intelie.challenges.Event;
 import net.intelie.challenges.EventIterator;
 import net.intelie.challenges.EventStore;
-import net.intelie.challenges.database.MongoDBConnection;
 
 public class EventStoreImpl implements EventStore {
 	
-	private MongoCollection<Event> events;
+	private EventList eventList;
 	
-	@SuppressWarnings("unchecked")
-	public EventStoreImpl() {
-		events = (MongoCollection<Event>) MongoDBConnection.getInstance().getCollection("events", Event.class);
+	public EventStoreImpl(List<Event> events) {
+		eventList = new EventList(events);
+	}
+	
+	@Override
+	public synchronized void insert(Event event) {
+		eventList.addEvent(event);
 	}
 
 	@Override
-	public void insert(Event event) {
-		events.insertOne(event);
+	public synchronized void removeAll(String type) {
+		EventIterator it = eventList.getIterator();
+		while (it.moveNext()) {
+			Event event = it.current();
+			if (event.type().equals(type))
+				it.remove();
+		}
 	}
 
 	@Override
-	public void removeAll(String type) {
-		events.deleteMany(Filters.all("type", type));
-	}
-
-	@Override
-	public EventIterator query(String type, long startTime, long endTime) {
-		Bson typeEq = Filters.eq("type", type);
-		Bson timestampGte = Filters.gte("timestamp", startTime);
-		Bson timestampLt = Filters.lt("timestamp", endTime);
+	public synchronized EventIterator query(String type, long startTime, long endTime) {
+		List<Event> queryEvents = new ArrayList<Event>();
 		
-		MongoCursor<Event> eventsList = events.find(Filters.and(typeEq, timestampGte, timestampLt)).iterator();
+		EventIterator it = eventList.getIterator();
+		while( it.moveNext()) {
+			Event event = it.current();
+			String eventType = event.type();
+			long eventTime = event.timestamp();
+			
+			if (eventType.equals(type) && (eventTime >= startTime && eventTime < endTime))
+				queryEvents.add(event);
+		}
 		
-		return new EventList(eventsList).iterator();
+		return new EventList(queryEvents).getIterator();
+	}
+
+	@Override
+	public synchronized EventIterator query(String type) {
+		List<Event> queryEvents = new ArrayList<Event>();
+		
+		EventIterator it = eventList.getIterator();
+		while (it.moveNext()) {
+			Event event = it.current();
+			String eventType = event.type();
+			
+			if (eventType.equals(type))
+				queryEvents.add(event);
+		}
+		
+		return new EventList(queryEvents).getIterator();
 	}
 }

@@ -1,44 +1,58 @@
 package net.intelie.challenges.impl;
 
-
-import com.mongodb.client.MongoCursor;
+import java.util.List;
 
 import net.intelie.challenges.Event;
 import net.intelie.challenges.EventIterator;
+import net.intelie.challenges.IEventList;
 
-public class EventList {
+public class EventList implements IEventList {
 	
-	private final MongoCursor<Event> events;
+	public List<Event> events;
 	
-	public EventList(MongoCursor<Event> events) {
+	public EventList(List<Event> events) {
 		this.events = events;
+	}
+
+	@Override
+	public EventIterator getIterator() {
+		return new EventIteratorImpl();
+	}
+	
+	public void addEvent(Event event) {
+		events.add(event);
+	}
+	
+	private class EventIteratorImpl implements EventIterator {
+
+		int index = 0;
 		
-	}
-	
-	public EventIterator iterator() {
-		return (EventIterator) new EventIteratorImpl();
-	}
-	
-	class EventIteratorImpl implements EventIterator {
-
-		@Override
-		public void remove() {
-			events.remove();
-		}
-
 		@Override
 		public void close() throws Exception {
-			events.close();
+			events = null;
 		}
 
 		@Override
 		public boolean moveNext() {
-			return events.hasNext();
+			if (index < events.size())
+				return true;
+			
+			return false;
 		}
 
 		@Override
 		public Event current() {
-			return events.next();
+			if (this.moveNext())
+				return events.get(index++);
+			
+			return null;
+		}
+
+		@Override
+		public void remove() {
+			int toRemove = index - 1;
+			events.remove(toRemove);
+			index = 0;
 		}
 	}
 }
